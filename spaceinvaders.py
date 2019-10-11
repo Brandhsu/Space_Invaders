@@ -16,10 +16,14 @@ SOUND_PATH = BASE_PATH + '/sounds/'
 # Colors (R, G, B)
 WHITE = (255, 255, 255)
 GREEN = (78, 255, 87)
+LIGHT = (220, 220, 220)
 YELLOW = (241, 255, 0)
 BLUE = (80, 255, 239)
 PURPLE = (203, 0, 255)
 RED = (237, 28, 36)
+
+# Global Variables (Brandon)
+lowest_point = 0
 
 SCREEN = display.set_mode((800, 600))
 FONT = FONT_PATH + 'space_invaders.ttf'
@@ -31,7 +35,6 @@ IMG_NAMES = ['ship', 'mystery',
              'laser', 'enemylaser']
 IMAGES = {name: image.load(IMAGE_PATH + '{}.png'.format(name)).convert_alpha()
           for name in IMG_NAMES}
-POSITIONS = [20, 120, 220, 320, 420, 520, 620, 720]
 
 BLOCKERS_POSITION = 450
 ENEMY_DEFAULT_POSITION = 65  # Initial value for a new game
@@ -41,13 +44,25 @@ ENEMY_HEALTH = 96
 
 class Ship(sprite.Sprite):
     def __init__(self):
-        sprite.Sprite.__init__(self)
+        sprite.Sprite.__init__(self) # fix so can get position
         self.image = IMAGES['ship']
+        self.rect = self.image.get_rect(topleft=(375, 540))
         self.speed = 5
-        self.position = 4
-        self.rect = self.image.get_rect(topleft=(POSITIONS[self.position], 540))
 
+    # update Ship UI
     def update(self, keys, *args):
+        global lowest_point
+        if keys[K_LEFT] and self.rect.x > 10:
+            self.rect.x -= self.speed
+        if keys[K_RIGHT] and self.rect.x < 740:
+            self.rect.x += self.speed
+        if keys[K_UP] and self.rect.y > lowest_point:
+            self.rect.y -= self.speed
+        if keys[K_DOWN] and self.rect.y < 540:
+            self.rect.y += self.speed
+
+        #print("SHIP LOCATION x:{}, y:{}".format(self.rect.x, self.rect.y))
+
         game.screen.blit(self.image, self.rect)
 
 
@@ -62,6 +77,7 @@ class Bullet(sprite.Sprite):
         self.filename = filename
         self.damage = 48
 
+    # update bullet UI
     def update(self, keys, *args):
         game.screen.blit(self.image, self.rect)
         self.rect.y += self.speed * self.direction
@@ -85,9 +101,11 @@ class Enemy(sprite.Sprite):
         self.index = (self.index + 1) % len(self.images)
         self.image = self.images[self.index]
 
+    # Update Enemy UI on damage
     def update(self, *args):
         self.image = self.images[self.index].copy()
         alpha = 255 * self.health / ENEMY_HEALTH
+        # Opacity
         self.image.fill((255, 255, 255, alpha), None, BLEND_RGBA_MULT)
         game.screen.blit(self.image, self.rect)
 
@@ -105,6 +123,7 @@ class Enemy(sprite.Sprite):
 
 
 class EnemiesGroup(sprite.Group):
+    lowest_point = 0
     def __init__(self, columns, rows):
         sprite.Group.__init__(self)
         self.enemies = [[None] * columns for _ in range(rows)]
@@ -123,6 +142,7 @@ class EnemiesGroup(sprite.Group):
         self._leftAliveColumn = 0
         self._rightAliveColumn = columns - 1
 
+    # Update Enemy Movement UI
     def update(self, current_time):
         if current_time - self.timer > self.moveTime:
             if self.direction == 1:
@@ -136,6 +156,7 @@ class EnemiesGroup(sprite.Group):
                 self.direction *= -1
                 self.moveNumber = 0
                 self.bottom = 0
+                # Move Enemy Down
                 for enemy in self:
                     enemy.rect.y += ENEMY_MOVE_DOWN
                     enemy.toggle_image()
@@ -149,6 +170,8 @@ class EnemiesGroup(sprite.Group):
                 self.moveNumber += 1
 
             self.timer += self.moveTime
+            global lowest_point
+            lowest_point = self.bottom + 35
 
     def add_internal(self, *sprites):
         super(EnemiesGroup, self).add_internal(*sprites)
@@ -177,6 +200,7 @@ class EnemiesGroup(sprite.Group):
         elif len(self) <= 10:
             self.moveTime = 400
 
+    # Kill Enemy     
     def kill(self, enemy):
         self.enemies[enemy.row][enemy.column] = None
         is_column_dead = self.is_column_dead(enemy.column)
@@ -204,14 +228,16 @@ class Blocker(sprite.Sprite):
         self.color = color
         self.image = Surface((self.width, self.height))
         self.image.fill(self.color)
+        self.image.fill((200, 200, 200, 60), None, BLEND_RGBA_MULT)
         self.rect = self.image.get_rect()
         self.row = row
         self.column = column
 
+    #Show Block UI
     def update(self, keys, *args):
         game.screen.blit(self.image, self.rect)
 
-
+# Red Boss Class
 class Mystery(sprite.Sprite):
     def __init__(self):
         sprite.Sprite.__init__(self)
@@ -253,7 +279,7 @@ class Mystery(sprite.Sprite):
         if passed > self.moveTime and resetTimer:
             self.timer = currentTime
 
-
+# Enemy Explosion Effect
 class EnemyExplosion(sprite.Sprite):
     def __init__(self, enemy, *groups):
         super(EnemyExplosion, self).__init__(*groups)
@@ -276,7 +302,7 @@ class EnemyExplosion(sprite.Sprite):
         elif 400 < passed:
             self.kill()
 
-
+# Boss Explosion Effect
 class MysteryExplosion(sprite.Sprite):
     def __init__(self, mystery, score, *groups):
         super(MysteryExplosion, self).__init__(*groups)
@@ -291,7 +317,7 @@ class MysteryExplosion(sprite.Sprite):
         elif 600 < passed:
             self.kill()
 
-
+# Ship Explosion Effect
 class ShipExplosion(sprite.Sprite):
     def __init__(self, ship, *groups):
         super(ShipExplosion, self).__init__(*groups)
@@ -306,7 +332,7 @@ class ShipExplosion(sprite.Sprite):
         elif 900 < passed:
             self.kill()
 
-
+# Display Life
 class Life(sprite.Sprite):
     def __init__(self, xpos, ypos):
         sprite.Sprite.__init__(self)
@@ -317,7 +343,7 @@ class Life(sprite.Sprite):
     def update(self, *args):
         game.screen.blit(self.image, self.rect)
 
-
+# Display Text
 class Text(object):
     def __init__(self, textFont, size, message, color, xpos, ypos):
         self.font = font.Font(textFont, size)
@@ -337,7 +363,9 @@ class SpaceInvaders(object):
         self.clock = time.Clock()
         self.caption = display.set_caption('Space Invaders')
         self.screen = SCREEN
-        self.background = image.load(IMAGE_PATH + 'background.jpg').convert()
+        self.background = image.load(IMAGE_PATH + 'quantum.jpg').convert()
+        self.background.fill((200, 200, 200, 0), None, BLEND_RGBA_MULT)
+        self.background = transform.scale(self.background, (1280, 720))
         self.startGame = False
         self.mainScreen = True
         self.gameOver = False
@@ -385,13 +413,17 @@ class SpaceInvaders(object):
         blockerGroup = sprite.Group()
         for row in range(4):
             for column in range(9):
-                blocker = Blocker(10, GREEN, row, column)
+                blocker = Blocker(10, LIGHT, row, column)
                 blocker.rect.x = 50 + (200 * number) + (column * blocker.width)
                 blocker.rect.y = BLOCKERS_POSITION + (row * blocker.height)
                 blockerGroup.add(blocker)
         return blockerGroup
 
     def create_audio(self):
+        mixer.init(48000, -16, 1, 1024)
+        mixer.music.load('sounds/SG.mp3')
+        mixer.music.play()
+        mixer.music.set_volume(0.35)
         self.sounds = {}
         for sound_name in ['shoot', 'shoot2', 'invaderkilled', 'mysterykilled',
                            'shipexplosion']:
@@ -424,48 +456,29 @@ class SpaceInvaders(object):
 
     def check_input(self):
         self.keys = key.get_pressed()
-        for e in event.get():
+        for e in event.get(): # grabs any hardware event 
             if self.should_exit(e):
                 sys.exit()
-            if e.type == KEYDOWN:
-                if e.key == K_SPACE:
-                    if len(self.bullets) == 0 and self.shipAlive:
-                        if self.score < 1000:
-                            bullet = Bullet(self.player.rect.x + 23,
+            if e.type == KEYDOWN and e.key == K_SPACE:
+                if len(self.bullets) == 0 and self.shipAlive:
+                    if self.score < 1000:
+                        bullet = Bullet(self.player.rect.x + 23,
+                                        self.player.rect.y + 5, -1,
+                                        15, 'laser', 'center')
+                        self.bullets.add(bullet)
+                        self.allSprites.add(self.bullets)
+                        self.sounds['shoot'].play()
+                    else:
+                        leftbullet = Bullet(self.player.rect.x + 8,
                                             self.player.rect.y + 5, -1,
-                                            15, 'laser', 'center')
-                            self.bullets.add(bullet)
-                            self.allSprites.add(self.bullets)
-                            self.sounds['shoot'].play()
-                        else:
-                            leftbullet = Bullet(self.player.rect.x + 8,
-                                                self.player.rect.y + 5, -1,
-                                                15, 'laser', 'left')
-                            rightbullet = Bullet(self.player.rect.x + 38,
-                                                 self.player.rect.y + 5, -1,
-                                                 15, 'laser', 'right')
-                            self.bullets.add(leftbullet)
-                            self.bullets.add(rightbullet)
-                            self.allSprites.add(self.bullets)
-                            self.sounds['shoot2'].play()
-                elif e.key == K_LEFT:
-                    if self.player.position > 0:
-                        self.player.position -= 1
-                        self.player.rect.x = POSITIONS[self.player.position]
-                elif e.key == K_RIGHT:
-                    if self.player.position < 7:
-                        self.player.position += 1
-                        self.player.rect.x = POSITIONS[self.player.position]
-            # def update(self, keys, *args):
-            # if keys[K_LEFT]:
-            #     self.leftButton = 1
-            # elif self.leftButton and self.position > 0:
-            #     print("go left")
-            #     self.rect.x = POSITIONS[self.position]
-            #     self.leftButton = 0
-            #
-            # if keys[K_RIGHT] and self.position < 7:
-            #     self.rect.x += self.speed
+                                            15, 'laser', 'left')
+                        rightbullet = Bullet(self.player.rect.x + 38,
+                                             self.player.rect.y + 5, -1,
+                                             15, 'laser', 'right')
+                        self.bullets.add(leftbullet)
+                        self.bullets.add(rightbullet)
+                        self.allSprites.add(self.bullets)
+                        self.sounds['shoot2'].play()
 
     def make_enemies(self):
         enemies = EnemiesGroup(10, 5)
@@ -501,6 +514,7 @@ class SpaceInvaders(object):
         return score
 
     def create_main_menu(self):
+        # Set up enemy size and background
         self.enemy1 = IMAGES['enemy3_1']
         self.enemy1 = transform.scale(self.enemy1, (40, 40))
         self.enemy2 = IMAGES['enemy2_2']
@@ -560,6 +574,7 @@ class SpaceInvaders(object):
                 self.gameOver = True
                 self.startGame = False
 
+        # Destory Blocks
         sprite.groupcollide(self.bullets, self.allBlockers, True, True)
         sprite.groupcollide(self.enemyBullets, self.allBlockers, True, True)
         if self.enemies.bottom >= BLOCKERS_POSITION:
